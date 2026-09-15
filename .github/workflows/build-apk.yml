@@ -19,16 +19,18 @@ jobs:
           mkdir -p buildsrc
           unzip -q JARVIS_MAX_3_0_PHONE_CLOUD.zip -d buildsrc
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
       - name: Install Gradle 8.9
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
           unzip -q gradle-8.9-bin.zip
           echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
-
-      - name: Install Android SDK components
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build APK
         working-directory: buildsrc/JARVIS_MAX_3_0
