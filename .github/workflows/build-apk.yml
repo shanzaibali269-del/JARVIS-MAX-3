@@ -19,7 +19,7 @@ jobs:
           mkdir -p buildsrc
           unzip -q JARVIS_MAX_3_0_PHONE_CLOUD.zip -d buildsrc
 
-      - name: Fix AndroidX, CameraX and Java compatibility
+      - name: Fix project compatibility
         run: |
           echo "android.useAndroidX=true" >> buildsrc/JARVIS_MAX_3_0/gradle.properties
           echo "android.enableJetifier=true" >> buildsrc/JARVIS_MAX_3_0/gradle.properties
@@ -27,25 +27,48 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          p = Path("buildsrc/JARVIS_MAX_3_0/app/build.gradle.kts")
-          s = p.read_text()
+          root = Path("buildsrc/JARVIS_MAX_3_0")
 
-          # CameraX 1.6.2 requires newer AGP/SDK.
-          # Use CameraX 1.5.3 with the existing API 35 build setup.
-          s = s.replace("1.6.2", "1.5.3")
+          # Fix CameraX compatibility with Android Gradle Plugin 8.7.3 / SDK 35
+          gradle_file = root / "app/build.gradle.kts"
+          text = gradle_file.read_text()
+          text = text.replace("1.6.2", "1.5.3")
 
-          # Make Java compilation target Java 17 to match Kotlin.
-          marker = '    compileSdk = 35\n'
-          addition = '''    compileOptions {
+          # Make Java target 17 to match Kotlin target 17
+          if "sourceCompatibility = JavaVersion.VERSION_17" not in text:
+              text = text.replace(
+                  "    compileSdk = 35\n",
+                  """    compileSdk = 35
+
+          """
+              )
+              marker = "    compileSdk = 35\n\n"
+              block = """    compileOptions {
               sourceCompatibility = JavaVersion.VERSION_17
               targetCompatibility = JavaVersion.VERSION_17
           }
 
-          '''
-          if addition.strip() not in s:
-              s = s.replace(marker, marker + "\n" + addition, 1)
+          """
+              text = text.replace(marker, marker + block, 1)
 
-          p.write_text(s)
+          gradle_file.write_text(text)
+
+          # Fix MainActivity Kotlin inner-class access
+          main_file = root / "app/src/main/java/com/jarvis/max/MainActivity.kt"
+          text = main_file.read_text()
+
+          old = "private class SimpleRecognitionListener("
+          new = "private inner class SimpleRecognitionListener("
+
+          if old not in text:
+              raise SystemExit(
+                  "Expected SimpleRecognitionListener declaration was not found."
+              )
+
+          text = text.replace(old, new, 1)
+          main_file.write_text(text)
+
+          print("Compatibility fixes applied successfully.")
           PY
 
       - name: Set up JDK 17
