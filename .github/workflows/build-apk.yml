@@ -19,11 +19,34 @@ jobs:
           mkdir -p buildsrc
           unzip -q JARVIS_MAX_3_0_PHONE_CLOUD.zip -d buildsrc
 
-      - name: Fix AndroidX and CameraX compatibility
+      - name: Fix AndroidX, CameraX and Java compatibility
         run: |
           echo "android.useAndroidX=true" >> buildsrc/JARVIS_MAX_3_0/gradle.properties
           echo "android.enableJetifier=true" >> buildsrc/JARVIS_MAX_3_0/gradle.properties
-          sed -i 's/1\.6\.2/1.5.3/g' buildsrc/JARVIS_MAX_3_0/app/build.gradle.kts
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("buildsrc/JARVIS_MAX_3_0/app/build.gradle.kts")
+          s = p.read_text()
+
+          # CameraX 1.6.2 requires newer AGP/SDK.
+          # Use CameraX 1.5.3 with the existing API 35 build setup.
+          s = s.replace("1.6.2", "1.5.3")
+
+          # Make Java compilation target Java 17 to match Kotlin.
+          marker = '    compileSdk = 35\n'
+          addition = '''    compileOptions {
+              sourceCompatibility = JavaVersion.VERSION_17
+              targetCompatibility = JavaVersion.VERSION_17
+          }
+
+          '''
+          if addition.strip() not in s:
+              s = s.replace(marker, marker + "\n" + addition, 1)
+
+          p.write_text(s)
+          PY
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -48,6 +71,11 @@ jobs:
         working-directory: buildsrc/JARVIS_MAX_3_0
         run: |
           gradle --no-daemon assembleDebug
+
+      - name: Verify APK
+        run: |
+          test -f buildsrc/JARVIS_MAX_3_0/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh buildsrc/JARVIS_MAX_3_0/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
